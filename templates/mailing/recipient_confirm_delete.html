@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Удалить получателя{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Удалить получателя?</h1>
+<div class="card p-4" style="max-width:640px">
+    <p>Вы собираетесь удалить <strong>{{ object.full_name }} ({{ object.email }})</strong>.</p>
+    <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Да, удалить</button>
+        <a href="{% url 'mailing:recipient_list' %}" class="btn btn-secondary">Отмена</a>
+    </form>
+</div>
+{% endblock %}
