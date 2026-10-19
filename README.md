@@ -9,11 +9,11 @@
 - SQLite (разработка)
 
 ## Ветки
-Gitflow: `main`, `develop`, `feature/*`, `release/*`, `hotfix/*`.
+Gitflow: `main`, `develop`, `feature/*`, `release/*`.
 
 ## Запуск
 1. `poetry install`
 2. `docker compose up -d`
 3. `poetry run python manage.py migrate`
-4. `poetry run python manage.py seed_data`
+4. `poetry run python manage.py fill_db`
 5. `poetry run python manage.py runserver`
