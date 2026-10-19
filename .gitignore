@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Poetry
+# poetry.lock и pyproject.toml коммитим
+
+# Django
+*.log
+db.sqlite3
+/staticfiles/
+/media/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
