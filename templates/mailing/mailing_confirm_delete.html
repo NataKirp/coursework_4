@@ -1,10 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}Удалить рассылку{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Удалить рассылку #{{ object.pk }}?</h1>
+<div class="card p-4" style="max-width:640px">
+    <p>Тема: <strong>«{{ object.message.subject }}»</strong><br>
+       Окно: {{ object.start_time|date:"d.m.Y H:i" }} — {{ object.end_time|date:"d.m.Y H:i" }}</p>
+    <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Да, удалить</button>
+        <a href="{% url 'mailing:mailing_list' %}" class="btn btn-secondary">Отмена</a>
+    </form>
+</div>
+{% endblock %}

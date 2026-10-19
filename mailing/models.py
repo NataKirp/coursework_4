@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -47,6 +49,14 @@ class Message(models.Model):
         return self.subject
 
 
+class MailingManager(models.Manager):
+    def visible_to(self, user):
+        qs = self.get_queryset()
+        if user.groups.filter(name='manager').exists():
+            return qs
+        return qs.filter(owner=user)
+
+
 class Mailing(models.Model):
     STATUS_CREATED = 'created'
     STATUS_STARTED = 'started'
@@ -86,6 +96,7 @@ class Mailing(models.Model):
         verbose_name='Владелец',
     )
     is_disabled = models.BooleanField(default=False, verbose_name='Отключена')
+    objects = MailingManager()
 
     class Meta:
         verbose_name = 'Рассылка'
@@ -97,9 +108,12 @@ class Mailing(models.Model):
 
     def clean(self):
         now = timezone.now()
-        if self.start_time and self.start_time < now:
+        # Допускаем создание рассылки с start_time в прошлом в пределах 5 минут
+        # (на время заполнения формы и клик "Сохранить").
+        tolerance = timedelta(minutes=5)
+        if self.start_time and self.start_time < (now - tolerance):
             raise ValidationError(
-                {'start_time': 'Дата начала не может быть в прошлом.'}
+                {'start_time': 'Дата начала не может быть в прошлом (более 5 минут назад).'}
             )
         if self.start_time and self.end_time and self.start_time >= self.end_time:
             raise ValidationError(
