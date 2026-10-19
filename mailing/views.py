@@ -14,6 +14,7 @@ from django.views.generic import (
 )
 
 from .forms import RecipientForm, MessageForm, MailingForm
+from mailing.mixins import OwnerOrManagerMixin, ManagerRequiredMixin
 from .models import Recipient, Message, Mailing, Attempt
 from .services import send_mailing, MailingNotAllowed
 
@@ -33,7 +34,7 @@ class HomeView(LoginRequiredMixin, TemplateView):
             user = self.request.user
 
             # Фильтруем данные по владельцу (если пользователь не менеджер)
-            if user.groups.filter(name='manager').exists():
+            if user.is_manager:
                 mailings_qs = Mailing.objects.all()
                 recipients_qs = Recipient.objects.all()
                 attempts_qs = Attempt.objects.all()
@@ -73,18 +74,12 @@ class HomeView(LoginRequiredMixin, TemplateView):
         return context
 
 
-# Recipient
-class RecipientListView(LoginRequiredMixin, ListView):
+# Recipients
+class RecipientListView(LoginRequiredMixin, OwnerOrManagerMixin, ListView):
     model = Recipient
     template_name = 'mailing/recipient_list.html'
     context_object_name = 'recipients'
     paginate_by = 10
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
 
 class RecipientCreateView(LoginRequiredMixin, CreateView):
@@ -99,33 +94,21 @@ class RecipientCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class RecipientUpdateView(LoginRequiredMixin, UpdateView):
+class RecipientUpdateView(LoginRequiredMixin, OwnerOrManagerMixin, UpdateView):
     model = Recipient
     form_class = RecipientForm
     template_name = 'mailing/recipient_form.html'
     success_url = reverse_lazy('mailing:recipient_list')
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, 'Получатель обновлён.')
         return super().form_valid(form)
 
 
-class RecipientDeleteView(LoginRequiredMixin, DeleteView):
+class RecipientDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
     model = Recipient
     template_name = 'mailing/recipient_confirm_delete.html'
     success_url = reverse_lazy('mailing:recipient_list')
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, 'Получатель удалён.')
@@ -133,17 +116,11 @@ class RecipientDeleteView(LoginRequiredMixin, DeleteView):
 
 
 # Message
-class MessageListView(LoginRequiredMixin, ListView):
+class MessageListView(LoginRequiredMixin, OwnerOrManagerMixin, ListView):
     model = Message
     template_name = 'mailing/message_list.html'
     context_object_name = 'messages'
     paginate_by = 10
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
 
 class MessageCreateView(LoginRequiredMixin, CreateView):
@@ -158,33 +135,21 @@ class MessageCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class MessageUpdateView(LoginRequiredMixin, UpdateView):
+class MessageUpdateView(LoginRequiredMixin, OwnerOrManagerMixin, UpdateView):
     model = Message
     form_class = MessageForm
     template_name = 'mailing/message_form.html'
     success_url = reverse_lazy('mailing:message_list')
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, 'Сообщение обновлено.')
         return super().form_valid(form)
 
 
-class MessageDeleteView(LoginRequiredMixin, DeleteView):
+class MessageDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
     model = Message
     template_name = 'mailing/message_confirm_delete.html'
     success_url = reverse_lazy('mailing:message_list')
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, 'Сообщение удалено.')
@@ -192,7 +157,7 @@ class MessageDeleteView(LoginRequiredMixin, DeleteView):
 
 
 # Mailing
-class MailingListView(LoginRequiredMixin, ListView):
+class MailingListView(LoginRequiredMixin, OwnerOrManagerMixin, ListView):
     model = Mailing
     template_name = 'mailing/mailing_list.html'
     context_object_name = 'mailings'
@@ -200,9 +165,7 @@ class MailingListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('message', 'owner')
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -212,20 +175,14 @@ class MailingListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class MailingDetailView(LoginRequiredMixin, DetailView):
+class MailingDetailView(LoginRequiredMixin, OwnerOrManagerMixin, DetailView):
     model = Mailing
     template_name = 'mailing/mailing_detail.html'
     context_object_name = 'mailing'
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
-
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
-        obj.update_status()          # ← требование уточнения
+        obj.update_status()  # ← требование уточнения
         return obj
 
     def get_context_data(self, **kwargs):
@@ -247,7 +204,7 @@ class MailingCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.owner = self.request.user
-        messages.success(self.request, 'Рассылка создана.')
+        # messages.success(self.request, 'Рассылка создана.')
         return super().form_valid(form)
 
 
@@ -258,10 +215,7 @@ class MailingUpdateView(LoginRequiredMixin, UpdateView):
     success_url = reverse_lazy('mailing:mailing_list')
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
+        return super().get_queryset().filter(owner=self.request.user)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -273,16 +227,10 @@ class MailingUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class MailingDeleteView(LoginRequiredMixin, DeleteView):
+class MailingDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
     model = Mailing
     template_name = 'mailing/mailing_confirm_delete.html'
     success_url = reverse_lazy('mailing:mailing_list')
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if self.request.user.groups.filter(name='manager').exists():
-            return qs
-        return qs.filter(owner=self.request.user)
 
     def form_valid(self, form):
         messages.success(self.request, 'Рассылка удалена.')
@@ -297,19 +245,25 @@ class MailingSendView(LoginRequiredMixin, View):
         return redirect('mailing:mailing_detail', pk=pk)
 
     def post(self, request, pk):
-        mailing = get_object_or_404(
-            Mailing.objects.visible_to(request.user), pk=pk
-        )
+        mailing = get_object_or_404(Mailing.objects.visible_to(request.user), pk=pk)
         mailing.update_status()
         try:
             attempts = send_mailing(mailing)
-        except MailingNotAllowed as exc:
-            messages.error(request, str(exc))
-        else:
             ok = sum(1 for a in attempts if a.status == Attempt.STATUS_OK)
-            fail = len(attempts) - ok
-            messages.success(
-                request,
-                f'Рассылка отправлена: успешно {ok}, ошибок {fail}.'
-            )
+            messages.success(request, f'Успешно отправлено: {ok}')
+        except MailingNotAllowed as e:
+            messages.error(request, str(e))
+        return redirect('mailing:mailing_detail', pk=pk)
+
+
+class MailingDisableView(ManagerRequiredMixin, View):
+    """Менеджер может отключить/включить чужую рассылку."""
+
+    def post(self, request, pk):
+        mailing = get_object_or_404(Mailing, pk=pk)
+        mailing.is_disabled = not mailing.is_disabled
+        mailing.save()
+        mailing.update_status()
+        state = "отключена" if mailing.is_disabled else "включена"
+        messages.success(request, f'Рассылка #{pk} {state}.')
         return redirect('mailing:mailing_detail', pk=pk)

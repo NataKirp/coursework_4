@@ -1,4 +1,5 @@
-from django.contrib.auth import logout
+from django.contrib import messages
+from django.contrib.auth import logout, get_user_model
 from django.contrib.auth.views import (
     LoginView,
     PasswordResetCompleteView,
@@ -6,9 +7,10 @@ from django.contrib.auth.views import (
     PasswordResetDoneView,
     PasswordResetView,
 )
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy, reverse
-from django.views.generic import CreateView, TemplateView
+from django.views import View
+from django.views.generic import CreateView, TemplateView, ListView
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
@@ -16,6 +18,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth.tokens import default_token_generator
 
+from mailing.mixins import ManagerRequiredMixin
 from .forms import (
     CustomAuthenticationForm,
     CustomPasswordResetForm,
@@ -118,3 +121,27 @@ def activate_view(request, uidb64, token):
         return redirect(reverse('users:activation_success'))
     else:
         return redirect(reverse('users:activation_failed'))
+
+
+class UserListView(ManagerRequiredMixin, ListView):
+    """Список всех пользователей (только для менеджера)."""
+    model = get_user_model()
+    template_name = 'users/user_list.html'
+    context_object_name = 'users_list'
+    ordering = ['-date_joined']
+
+
+class UserToggleActiveView(ManagerRequiredMixin, View):
+    """Блокировка/разблокировка пользователя."""
+
+    def post(self, request, pk):
+        User = get_user_model()
+        user_to_toggle = get_object_or_404(User, pk=pk)
+        if user_to_toggle == request.user:
+            messages.error(request, "Нельзя заблокировать самого себя.")
+        else:
+            user_to_toggle.is_active = not user_to_toggle.is_active
+            user_to_toggle.save()
+            state = "разблокирован" if user_to_toggle.is_active else "заблокирован"
+            messages.success(request, f'Пользователь {user_to_toggle.username} {state}.')
+        return redirect('users:user_list')

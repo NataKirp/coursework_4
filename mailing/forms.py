@@ -47,7 +47,7 @@ class MailingForm(forms.ModelForm):
                 format='%Y-%m-%dT%H:%M',
             ),
             'message': forms.Select(attrs={'class': 'form-select'}),
-            'recipients': forms.SelectMultiple(attrs={'class': 'form-select', 'size': 8}),
+            'recipients': forms.CheckboxSelectMultiple(attrs={'class': 'list-unstyled'}),
         }
         labels = {
             'start_time': 'Дата и время начала отправки',
@@ -58,10 +58,18 @@ class MailingForm(forms.ModelForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # datetime-local требует input_formats
         self.fields['start_time'].input_formats = ['%Y-%m-%dT%H:%M']
         self.fields['end_time'].input_formats = ['%Y-%m-%dT%H:%M']
-        # показываем только «свои» message и recipients
-        if user and not user.groups.filter(name='manager').exists():
-            self.fields['message'].queryset = self.fields['message'].queryset.filter(owner=user)
-            self.fields['recipients'].queryset = self.fields['recipients'].queryset.filter(owner=user)
+
+        # Улучшаем отображение каждого чекбокса (добавляем класс form-check-input)
+        self.fields['recipients'].widget.attrs.update({'class': 'form-check-input'})
+
+        if user and not user.is_manager:
+            from django.db.models import Q
+            self.fields['message'].queryset = self.fields['message'].queryset.filter(
+                Q(owner=user) | Q(owner__isnull=True)
+            )
+            # Принудительно меняем queryset, чтобы выводить Email в удобном виде
+            self.fields['recipients'].queryset = self.fields['recipients'].queryset.filter(
+                Q(owner=user) | Q(owner__isnull=True)
+            )

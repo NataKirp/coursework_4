@@ -21,4 +21,8 @@ urlpatterns = [
 
     # Обработчик ссылки из письма
     path('activate/<uidb64>/<token>/', views.activate_view, name='activate'),
+
+    # Менеджер: управление пользователями
+    path('manage/list/', views.UserListView.as_view(), name='user_list'),
+    path('manage/<int:pk>/toggle/', views.UserToggleActiveView.as_view(), name='user_toggle'),
 ]
