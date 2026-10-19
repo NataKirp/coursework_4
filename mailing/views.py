@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -16,8 +18,59 @@ from .models import Recipient, Message, Mailing, Attempt
 from .services import send_mailing, MailingNotAllowed
 
 
-class HomeView(TemplateView):
+class HomeView(LoginRequiredMixin, TemplateView):
     template_name = 'mailing/home.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # 1. Пытаемся получить статистику из кэша Redis (ключ 'home_stats')
+        stats = cache.get('home_stats')
+
+        # 2. Если в кэше пусто, считаем статистику и сохраняем
+        if stats is None:
+            now = timezone.now()
+            user = self.request.user
+
+            # Фильтруем данные по владельцу (если пользователь не менеджер)
+            if user.groups.filter(name='manager').exists():
+                mailings_qs = Mailing.objects.all()
+                recipients_qs = Recipient.objects.all()
+                attempts_qs = Attempt.objects.all()
+            else:
+                mailings_qs = Mailing.objects.filter(owner=user)
+                recipients_qs = Recipient.objects.filter(owner=user)
+                attempts_qs = Attempt.objects.filter(mailing__owner=user)
+
+            stats = {
+                'total_mailings': mailings_qs.count(),
+                'active_mailings': mailings_qs.filter(
+                    start_time__lte=now,
+                    end_time__gte=now,
+                    is_disabled=False
+                ).count(),
+                'total_recipients': recipients_qs.count(),
+                'total_attempts_ok': attempts_qs.filter(status=Attempt.STATUS_OK).count(),
+                'total_attempts_fail': attempts_qs.filter(status=Attempt.STATUS_FAIL).count(),
+            }
+
+            # Кэшируем словарь на 5 минут (300 секунд)
+            cache.set('home_stats', stats, timeout=300)
+
+        context.update(stats)
+
+        # Получаем последние 5 рассылок для отображения в таблице (их не кэшируем)
+        now = timezone.now()
+        recent_mailings = Mailing.objects.filter(owner=self.request.user).order_by('-start_time')[
+                          :5] if not self.request.user.groups.filter(
+            name='manager').exists() else Mailing.objects.all().order_by('-start_time')[:5]
+
+        for m in recent_mailings:
+            m.update_status()
+
+        context['recent_mailings'] = recent_mailings
+
+        return context
 
 
 # Recipient
