@@ -1,10 +1,14 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
+from django.db.models import Case, When
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import cache_page, never_cache
+from django.views.decorators.vary import vary_on_cookie
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -19,6 +23,8 @@ from .models import Recipient, Message, Mailing, Attempt
 from .services import send_mailing, MailingNotAllowed
 
 
+@method_decorator(vary_on_cookie, name='dispatch')
+@method_decorator(cache_page(60 * 5), name='dispatch')
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = 'mailing/home.html'
 
@@ -115,7 +121,7 @@ class RecipientDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
         return super().form_valid(form)
 
 
-# Message
+# Messages
 class MessageListView(LoginRequiredMixin, OwnerOrManagerMixin, ListView):
     model = Message
     template_name = 'mailing/message_list.html'
@@ -164,17 +170,27 @@ class MailingListView(LoginRequiredMixin, OwnerOrManagerMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('message', 'owner')
-        return qs
+        user = self.request.user
+        cache_key = f'mailing_list_{"manager" if user.is_manager else user.id}'
+
+        mailing_ids = cache.get(cache_key)
+
+        if mailing_ids is None:
+            qs = super().get_queryset()
+            mailing_ids = list(qs.values_list('id', flat=True))
+            cache.set(cache_key, mailing_ids, timeout=300)  # 5 минут
+
+        preserved_order = Case(*[When(pk=pk, then=pos) for pos, pk in enumerate(mailing_ids)])
+        return Mailing.objects.filter(pk__in=mailing_ids).select_related('message', 'owner').order_by(preserved_order)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # обновим статусы всех рассылок на странице
         for m in ctx['mailings']:
             m.update_status()
         return ctx
 
 
+@method_decorator(never_cache, name='dispatch')
 class MailingDetailView(LoginRequiredMixin, OwnerOrManagerMixin, DetailView):
     model = Mailing
     template_name = 'mailing/mailing_detail.html'
