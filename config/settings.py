@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
 
     'mailing',
-    'users',
+    'users.apps.UsersConfig',
 ]
 
 MIDDLEWARE = [

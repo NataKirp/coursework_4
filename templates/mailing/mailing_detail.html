@@ -7,10 +7,27 @@
         <a href="{% url 'mailing:mailing_update' mailing.pk %}" class="btn btn-outline-primary">
             <i class="bi bi-pencil"></i> Изменить
         </a>
-        <form method="post" action="{% url 'mailing:mailing_send' mailing.pk %}"
-              onsubmit="return confirm('Запустить рассылку сейчас?');">
+
+        {# Кнопка отключения — ТОЛЬКО для суперюзера, также для менеджера и ТОЛЬКО если рассылка ему не принадлежит #}
+        {% if request.user.groups.all %}
+        {% for group in request.user.groups.all %}
+        {% if request.user.is_manager %}
+        <form method="post" action="{% url 'mailing:mailing_disable' mailing.pk %}" class="d-inline">
             {% csrf_token %}
-            <button class="btn btn-success" type="submit">
+            <button type="submit"
+                    class="btn {% if mailing.is_disabled %}btn-outline-success{% else %}btn-outline-warning{% endif %}">
+                {% if mailing.is_disabled %}Включить{% else %}Отключить{% endif %}
+            </button>
+        </form>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        {# Кнопка отправки — БЕЗ вложенности в другие формы #}
+        <form method="post" action="{% url 'mailing:mailing_send' mailing.pk %}"
+              onsubmit="return confirm('Запустить рассылку сейчас?');" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success" {% if mailing.is_disabled %}disabled{% endif %}>
                 <i class="bi bi-send"></i> Отправить сейчас
             </button>
         </form>
@@ -40,14 +57,16 @@
             <dd class="col-sm-9">{{ mailing.message.subject }}</dd>
 
             <dt class="col-sm-3">Тело</dt>
-            <dd class="col-sm-9"><pre class="mb-0">{{ mailing.message.body }}</pre></dd>
+            <dd class="col-sm-9">
+                <pre class="mb-0">{{ mailing.message.body }}</pre>
+            </dd>
 
             <dt class="col-sm-3">Получатели</dt>
             <dd class="col-sm-9">
                 {% for r in mailing.recipients.all %}
-                    <span class="badge bg-light text-dark border">{{ r.email }}</span>
+                <span class="badge bg-light text-dark border">{{ r.email }}</span>
                 {% empty %}
-                    <span class="text-muted">— нет —</span>
+                <span class="text-muted">— нет —</span>
                 {% endfor %}
             </dd>
         </dl>
@@ -59,27 +78,29 @@
     <div class="table-responsive">
         <table class="table table-sm mb-0 align-middle">
             <thead class="table-light">
-                <tr>
-                    <th>Время</th>
-                    <th>Статус</th>
-                    <th>Ответ</th>
-                </tr>
+            <tr>
+                <th>Время</th>
+                <th>Статус</th>
+                <th>Ответ</th>
+            </tr>
             </thead>
             <tbody>
             {% for a in attempts %}
-                <tr>
-                    <td>{{ a.attempt_time|date:"d.m.Y H:i:s" }}</td>
-                    <td>
-                        {% if a.status == 'ok' %}
-                            <span class="badge bg-success">Успешно</span>
-                        {% else %}
-                            <span class="badge bg-danger">Не успешно</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-truncate" style="max-width:520px">{{ a.server_response }}</td>
-                </tr>
+            <tr>
+                <td>{{ a.attempt_time|date:"d.m.Y H:i:s" }}</td>
+                <td>
+                    {% if a.status == 'ok' %}
+                    <span class="badge bg-success">Успешно</span>
+                    {% else %}
+                    <span class="badge bg-danger">Не успешно</span>
+                    {% endif %}
+                </td>
+                <td class="text-truncate" style="max-width:520px">{{ a.server_response }}</td>
+            </tr>
             {% empty %}
-                <tr><td colspan="3" class="text-center text-muted py-3">Попыток ещё не было</td></tr>
+            <tr>
+                <td colspan="3" class="text-center text-muted py-3">Попыток ещё не было</td>
+            </tr>
             {% endfor %}
             </tbody>
         </table>
